@@ -1,7 +1,7 @@
 {
-	"name": "obsidian-sample-plugin",
+	"name": "obsidian-simple-sqlite",
 	"version": "1.0.0",
-	"description": "This is a sample plugin for Obsidian (https://obsidian.md)",
+	"description": "Embed SQLite database queries directly in notes and view results as formatted tables",
 	"main": "main.js",
 	"scripts": {
 		"dev": "node esbuild.config.mjs",

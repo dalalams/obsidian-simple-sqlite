@@ -1,6 +1,6 @@
-import { App, Editor, MarkdownView, Modal, Notice, Plugin, PluginSettingTab, Setting } from 'obsidian';
+import { Plugin, TFile } from 'obsidian';
+import initSqlJs from 'sql.js';
 
-// Remember to rename these classes and interfaces!
 
 interface MyPluginSettings {
 	mySetting: string;
@@ -12,74 +12,25 @@ const DEFAULT_SETTINGS: MyPluginSettings = {
 
 export default class MyPlugin extends Plugin {
 	settings: MyPluginSettings;
+	private SQL: any;
 
 	async onload() {
+		console.log("INFO: loading plugin", this)
 		await this.loadSettings();
 
-		// This creates an icon in the left ribbon.
-		const ribbonIconEl = this.addRibbonIcon('dice', 'Sample Plugin', (evt: MouseEvent) => {
-			// Called when the user clicks the icon.
-			new Notice('This is a notice!');
-		});
-		// Perform additional things with the ribbon
-		ribbonIconEl.addClass('my-plugin-ribbon-class');
-
-		// This adds a status bar item to the bottom of the app. Does not work on mobile apps.
-		const statusBarItemEl = this.addStatusBarItem();
-		statusBarItemEl.setText('Status Bar Text');
-
-		// This adds a simple command that can be triggered anywhere
-		this.addCommand({
-			id: 'open-sample-modal-simple',
-			name: 'Open sample modal (simple)',
-			callback: () => {
-				new SampleModal(this.app).open();
-			}
-		});
-		// This adds an editor command that can perform some operation on the current editor instance
-		this.addCommand({
-			id: 'sample-editor-command',
-			name: 'Sample editor command',
-			editorCallback: (editor: Editor, view: MarkdownView) => {
-				console.log(editor.getSelection());
-				editor.replaceSelection('Sample Editor Command');
-			}
-		});
-		// This adds a complex command that can check whether the current state of the app allows execution of the command
-		this.addCommand({
-			id: 'open-sample-modal-complex',
-			name: 'Open sample modal (complex)',
-			checkCallback: (checking: boolean) => {
-				// Conditions to check
-				const markdownView = this.app.workspace.getActiveViewOfType(MarkdownView);
-				if (markdownView) {
-					// If checking is true, we're simply "checking" if the command can be run.
-					// If checking is false, then we want to actually perform the operation.
-					if (!checking) {
-						new SampleModal(this.app).open();
-					}
-
-					// This command will only show up in Command Palette when the check function returns true
-					return true;
-				}
-			}
+		this.SQL = await initSqlJs({
+			locateFile: (file: string) => `https://sql.js.org/dist/${file}`
 		});
 
-		// This adds a settings tab so the user can configure various aspects of the plugin
-		this.addSettingTab(new SampleSettingTab(this.app, this));
-
-		// If the plugin hooks up any global DOM events (on parts of the app that doesn't belong to this plugin)
-		// Using this function will automatically remove the event listener when this plugin is disabled.
-		this.registerDomEvent(document, 'click', (evt: MouseEvent) => {
-			console.log('click', evt);
+		this.registerMarkdownCodeBlockProcessor('sqlite-view', (source, el, _) => {
+			this.processSqliteView(source, el)
 		});
 
-		// When registering intervals, this function will automatically clear the interval when the plugin is disabled.
-		this.registerInterval(window.setInterval(() => console.log('setInterval'), 5 * 60 * 1000));
+		console.log("INFO: plugin loaded", this)
 	}
 
 	onunload() {
-
+		console.log("INFO: unloaded plugin", this)
 	}
 
 	async loadSettings() {
@@ -89,46 +40,96 @@ export default class MyPlugin extends Plugin {
 	async saveSettings() {
 		await this.saveData(this.settings);
 	}
+
+	async processSqliteView(source: string, el: HTMLElement) {
+		try {
+			const contents = parseContents(source)
+
+			const file = this.app.vault.getFileByPath(contents.f)
+
+			if (!file) {
+				el.createEl('div', { text: `Error: Database file "${contents.f}" not found` });
+				return;
+			}
+
+			const db = await this.connect(file)
+			const { cols, rows } = await this.executeQuery(contents.q, db)
+
+			this.renderTable(el, cols, rows)
+		} catch (error) {
+			el.createEl('div', { text: `Error: ${error.message}` });
+		}
+	}
+
+	private async connect(path: TFile) {
+		console.log("INFO: connecting to db, file: ", path)
+		const dbBin = await this.app.vault.readBinary(path)
+
+		const db = new this.SQL.Database(new Uint8Array(dbBin));
+		if (!db) {
+			throw new Error(`Failed to load database from ${path.path}`);
+		}
+
+		console.log(`INFO: loaded db at ${path.path} into memory`)
+		return db
+	}
+
+	private async executeQuery(query: string, db: any) {
+		const res = db.exec(query)
+
+		if (!res || res.length === 0) {
+			throw new Error("Query returned no results");
+		}
+
+		const cols = res[0].columns
+		const rows = res[0].values
+
+		return { cols, rows }
+	}
+	private renderTable(el: HTMLElement, cols: any, rows: any) {
+		const table = el.createEl('table');
+		const head = table.createEl('thead');
+		const body = table.createEl('tbody');
+
+		const htr = head.createEl('tr')
+		for (let i = 0; i < cols.length; i++) {
+			htr.createEl('th', { text: cols[i] })
+		}
+
+		for (let i = 0; i < rows.length; i++) {
+			const row = body.createEl('tr');
+			for (let j = 0; j < cols.length; j++) {
+				row.createEl('td', { text: String(rows[i][j] || '') });
+			}
+		}
+	}
 }
 
-class SampleModal extends Modal {
-	constructor(app: App) {
-		super(app);
+function parseContents(source: string) {
+	const lines = source.split('\n').filter(line => line.trim().length > 0);
+	
+	if (lines.length < 2) {
+		throw new Error("Invalid format. Expected: file_path\\nquery");
 	}
 
-	onOpen() {
-		const {contentEl} = this;
-		contentEl.setText('Woah!');
+	let [f, q] = lines;
+	f = f.trim();
+	q = q.trim();
+
+	if (f.length === 0) {
+		throw new Error("Invalid format. File path is empty");
 	}
 
-	onClose() {
-		const {contentEl} = this;
-		contentEl.empty();
-	}
-}
-
-class SampleSettingTab extends PluginSettingTab {
-	plugin: MyPlugin;
-
-	constructor(app: App, plugin: MyPlugin) {
-		super(app, plugin);
-		this.plugin = plugin;
+	if (!f.endsWith(".db") && !f.endsWith(".sqlite") && !f.endsWith(".sqlite3")) {
+		throw new Error("Invalid format. File path must end with .db, .sqlite, or .sqlite3");
 	}
 
-	display(): void {
-		const {containerEl} = this;
-
-		containerEl.empty();
-
-		new Setting(containerEl)
-			.setName('Setting #1')
-			.setDesc('It\'s a secret')
-			.addText(text => text
-				.setPlaceholder('Enter your secret')
-				.setValue(this.plugin.settings.mySetting)
-				.onChange(async (value) => {
-					this.plugin.settings.mySetting = value;
-					await this.plugin.saveSettings();
-				}));
+	if (q.length === 0) {
+		throw new Error("Invalid format. Query is empty");
 	}
+
+	if (f.startsWith("./")) f = f.substring(2);
+	if (!q.endsWith(";")) q = q + ';';
+
+	return { f, q };
 }
