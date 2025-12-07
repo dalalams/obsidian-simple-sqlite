@@ -1,9 +1,15 @@
 import initSqlJs, { SqlJsStatic, Database, QueryExecResult, SqlValue } from 'sql.js';
+import { ColumnSchema } from 'src/schema_provider';
 
 export class DbConfig {
 	public readonly WasmLocation: string;
 }
 
+export type QueryResult = {
+	columns: string[],
+	values: SqlValue[][],
+	schema: ColumnSchema[],
+}
 
 class DatabaseManager {
 	private static instance: DatabaseManager | null = null;

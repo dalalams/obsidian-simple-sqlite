@@ -3,45 +3,33 @@ import { Database, QueryExecResult } from "sql.js";
 import { Cache, DbFileCacheEntry, QueryResultCacheEntry } from './cache';
 import DatabaseManager from "./db/connection";
 import { debug, info } from "./logging";
-import Parser from "./parser";
+import Parser, { ParsedConfig } from "./parser";
 import Renderer from "./renderer";
+import SchemaProvider from "./schema_provider";
 
 export default class Engine {
-	private app: App;
-	private parser: Parser;
-	private renderer: Renderer;
-	private dbManager: DatabaseManager;
 
-	private dbCache: Cache<DbFileCacheEntry>;
-	private queryCache: Cache<QueryResultCacheEntry>;
-
-	constructor(app: App,
-		parser: Parser,
-		renderer: Renderer,
-		dbCache: Cache<DbFileCacheEntry>,
-		queryCache: Cache<QueryResultCacheEntry>,
-		dbManager: DatabaseManager) {
-		this.parser = parser;
-		this.renderer = renderer;
-		this.dbManager = dbManager;
-
-		this.dbCache = dbCache;
-		this.queryCache = queryCache;
-
-		this.app = app;
+	constructor(private app: App,
+		private parser: Parser,
+		private renderer: Renderer,
+		private dbCache: Cache<DbFileCacheEntry>,
+		private queryCache: Cache<QueryResultCacheEntry>,
+		private schemaProvider: SchemaProvider,
+		private dbManager: DatabaseManager) {
 	}
 
 	async processSqliteView(source: string, el: HTMLElement) {
 		debug("processing sqlite view")
 		try {
-			const sq = this.parser.parse(source)
-			const file = this.app.vault.getFileByPath(sq.dbPath)
+			const parsingSpec = this.schemaProvider.getParsingSpec();
+			const parsedCfg = this.parser.parse(source, parsingSpec)
+			const file = this.app.vault.getFileByPath(parsedCfg.dbPath)
 			if (!file) {
-				el.createEl('div', { text: `Error: Database file "${sq.dbPath}" not found` });
+				el.createEl('div', { text: `Error: Database file "${parsedCfg.dbPath}" not found` });
 				return;
 			}
 
-			const queryResults = await this.processQuery(file, sq.query)
+			const queryResults = await this.processQuery(file, parsedCfg)
 
 			this.renderer.render(el, queryResults)
 
@@ -50,8 +38,8 @@ export default class Engine {
 		}
 	}
 
-	private async processQuery(file: TFile, query: string): Promise<QueryExecResult> {
-		let queryResults = this.getCachedQueryResults(file, query)
+	private async processQuery(file: TFile, cfg: ParsedConfig): Promise<QueryExecResult> {
+		let queryResults = this.getCachedQueryResults(file, cfg.query)
 		if (queryResults) {
 			return queryResults
 		}
@@ -69,9 +57,10 @@ export default class Engine {
 			info("db loaded from file")
 		}
 
-		queryResults = await this.dbManager.exec(file.path, query)
+		const schema = await this.schemaProvider.getSchema(cfg);
+		queryResults = await this.dbManager.exec(file.path, cfg.query)
 
-		this.cacheQuery(file, query, queryResults)
+		this.cacheQuery(file, cfg.query, queryResults)
 
 		return queryResults
 	}

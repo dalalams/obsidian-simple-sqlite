@@ -13,6 +13,7 @@
 	"author": "",
 	"license": "MIT",
 	"devDependencies": {
+		"@types/jest": "^30.0.0",
 		"@types/node": "^16.11.6",
 		"@types/sql.js": "^1.4.9",
 		"@typescript-eslint/eslint-plugin": "5.29.0",
