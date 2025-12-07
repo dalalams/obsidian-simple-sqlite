@@ -1,25 +1,27 @@
-import initSqlJs, { SqlJsStatic, Database, QueryExecResult } from 'sql.js';
+import initSqlJs, { SqlJsStatic, Database, QueryExecResult, SqlValue } from 'sql.js';
 
 export class DbConfig {
 	public readonly WasmLocation: string;
 }
+
 
 class DatabaseManager {
 	private static instance: DatabaseManager | null = null;
 
 	private readonly dbCfg: DbConfig;
 	private sql?: SqlJsStatic;
-	private _connPool: Database[]; 
+	private _connPool: Map<string, Database>;
 
 	private constructor(dbCfg: DbConfig) {
 		this.dbCfg = dbCfg
+		this._connPool = new Map();
 	}
 
 	static async create(dbCfg: DbConfig): Promise<DatabaseManager> {
 		if (!DatabaseManager.instance) {
 			const manager = new DatabaseManager(dbCfg);
 			await manager.init();
-			return manager;
+			DatabaseManager.instance = manager;
 		}
 		return DatabaseManager.instance
 	}
@@ -32,9 +34,13 @@ class DatabaseManager {
 	}
 
 
-	async connect(buf: ArrayBuffer): Promise<Database> {
+	async connect(name: string, buf: ArrayBuffer): Promise<Database> {
 		if (!this.sql) {
 			throw new Error(`ERROR: sql.js uninitialized`);
+		}
+
+		if (this._connPool.has(name)) {
+			return this._connPool.get(name)!;
 		}
 
 		const db = new this.sql.Database(new Uint8Array(buf));
@@ -42,10 +48,16 @@ class DatabaseManager {
 			throw new Error(`ERROR: failed to load database from buffer`);
 		}
 
+		this._connPool.set(name, db);
 		return db
 	}
 
-	async exec(db: Database, query: string): Promise<QueryExecResult> {
+	async exec(dbName: string, query: string): Promise<QueryExecResult> {
+		const db = this._connPool.get(dbName);
+		if (!db) {
+			throw new Error(`ERROR: database "${dbName}" not found`);
+		}
+
 		const res = db.exec(query)
 
 		if (!res || res.length === 0) {

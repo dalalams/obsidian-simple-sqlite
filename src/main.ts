@@ -1,5 +1,5 @@
 import { Plugin } from 'obsidian';
-import DatabaseManager, { DbConfig } from './db/manager';
+import DatabaseManager, { DbConfig } from './db/connection';
 import Engine from './engine';
 import { CodeBlockParser } from './parser';
 import { HTMLTableRenderer } from './renderer';

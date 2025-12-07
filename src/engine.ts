@@ -1,7 +1,7 @@
 import { App, TFile } from "obsidian";
 import { Database, QueryExecResult } from "sql.js";
 import { Cache, DbFileCacheEntry, QueryResultCacheEntry } from './cache';
-import DatabaseManager from "./db/manager";
+import DatabaseManager from "./db/connection";
 import { debug, info } from "./logging";
 import Parser from "./parser";
 import Renderer from "./renderer";
@@ -63,13 +63,13 @@ export default class Engine {
 		if (!db) {
 			debug("connecting to db, at: ", file)
 			const buf = await this.app.vault.readBinary(file)
-			db = await this.dbManager.connect(buf);
+			db = await this.dbManager.connect(file.path, buf);
 
 			this.cacheDb(file, db)
 			info("db loaded from file")
 		}
 
-		queryResults = await this.dbManager.exec(db, query)
+		queryResults = await this.dbManager.exec(file.path, query)
 
 		this.cacheQuery(file, query, queryResults)
 
