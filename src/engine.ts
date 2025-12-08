@@ -6,6 +6,7 @@ import { debug, info } from "./logging";
 import Parser, { ParsedConfig } from "./parser";
 import Renderer from "./renderer";
 import SchemaProvider from "./schema_provider";
+import Table from "./table";
 
 export default class Engine {
 
@@ -59,6 +60,8 @@ export default class Engine {
 
 		const schema = await this.schemaProvider.getSchema(cfg);
 		queryResults = await this.dbManager.exec(file.path, cfg.query)
+		
+		const tableState = Table.fromExecResults(queryResults.columns, queryResults.values, schema)
 
 		this.cacheQuery(file, cfg.query, queryResults)
 

@@ -1,14 +1,7 @@
-import initSqlJs, { SqlJsStatic, Database, QueryExecResult, SqlValue } from 'sql.js';
-import { ColumnSchema } from 'src/schema_provider';
+import initSqlJs, { SqlJsStatic, Database, QueryExecResult } from 'sql.js';
 
 export class DbConfig {
 	public readonly WasmLocation: string;
-}
-
-export type QueryResult = {
-	columns: string[],
-	values: SqlValue[][],
-	schema: ColumnSchema[],
 }
 
 class DatabaseManager {
