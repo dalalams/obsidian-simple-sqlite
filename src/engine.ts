@@ -4,12 +4,18 @@ import { Cache, DbFileCacheEntry, QueryResultCacheEntry } from './cache';
 import DatabaseManager from "./db/connection";
 import { debug, info } from "./logging";
 import Parser, { ParsedConfig } from "./parser";
-import Renderer from "./renderer";
+import Renderer, { TableView } from "./renderer";
 import SchemaProvider from "./schema_provider";
 import Table from "./table";
 
-export default class Engine {
+type ViewState = {
+	table: Table;
+	view: TableView;
+	dbPath: string;
+	query: string;
+}
 
+export default class Engine {
 	constructor(private app: App,
 		private parser: Parser,
 		private renderer: Renderer,
@@ -30,19 +36,35 @@ export default class Engine {
 				return;
 			}
 
-			const queryResults = await this.processQuery(file, parsedCfg)
+			const table = await this.processQuery(file, parsedCfg)
 
-			this.renderer.render(el, queryResults)
+			const view = this.renderer.render(el, table.getData(), {
+				onCellBlur: (rowIdx, colIdx, value) => {
+					// todo
+				},
+				onSave: () => {
+					// todo
+				},
+				onAddRow: () => {
+					debug("row added");
+					// todo
+				},
+				onAddCol: (name) => {
+					debug("column added:", name);
+					// todo
+				},
+			});
 
 		} catch (error) {
 			el.createEl('div', { text: `Error: ${error.message}` });
 		}
 	}
 
-	private async processQuery(file: TFile, cfg: ParsedConfig): Promise<QueryExecResult> {
+	private async processQuery(file: TFile, cfg: ParsedConfig): Promise<Table> {
 		let queryResults = this.getCachedQueryResults(file, cfg.query)
 		if (queryResults) {
-			return queryResults
+			// todo: temporary; will cache table instead and schema will be available
+			return Table.fromExecResults(queryResults.columns, queryResults.values, null)
 		}
 
 		debug("no cached query results")
@@ -60,12 +82,12 @@ export default class Engine {
 
 		const schema = await this.schemaProvider.getSchema(cfg);
 		queryResults = await this.dbManager.exec(file.path, cfg.query)
-		
-		const tableState = Table.fromExecResults(queryResults.columns, queryResults.values, schema)
+
+		const table = Table.fromExecResults(queryResults.columns, queryResults.values, schema)
 
 		this.cacheQuery(file, cfg.query, queryResults)
 
-		return queryResults
+		return table
 	}
 
 

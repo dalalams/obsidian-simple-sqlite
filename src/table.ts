@@ -14,6 +14,14 @@ export type TableData = {
 	schema: ColumnSchema[],
 }
 
+export type CellError = {
+	rowIdx: number
+	colIdx: number
+	colName: string
+	message: string
+	severity: 'error' | 'warning'
+}
+
 type SchemaAlterations = {
 	colsRenamed: { old: string, new: string }[],
 	colsAdded: string[],
@@ -24,14 +32,6 @@ type ParseResult = {
 	valid: boolean;
 	message: string;
 	parsed: SqlValue;
-}
-
-type CellError = {
-	rowIdx: number
-	colIdx: number
-	colName: string
-	message: string
-	severity: 'error' | 'warning'
 }
 
 export default class Table {
@@ -72,6 +72,10 @@ export default class Table {
 		return this.cellErrors.size > 0
 	}
 
+	getData(): TableData {
+		return this._data
+	}
+
 	getMutations() {
 		return this.mutations
 	}
@@ -82,6 +86,7 @@ export default class Table {
 	}
 
 	private reset() {
+		this.cellErrors = new Map()
 		this.mutations = {
 			updates: new Map(),
 			inserts: new Map(),
