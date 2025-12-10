@@ -1,12 +1,12 @@
 import { App, TFile } from "obsidian";
-import { Database, QueryExecResult } from "sql.js";
-import { Cache, DbFileCacheEntry, QueryResultCacheEntry } from './cache';
+import { Database } from "sql.js";
+import { Cache, DbFileCacheEntry, TableDataCacheEntry } from './cache';
 import DatabaseManager from "./db/connection";
 import { debug, info } from "./logging";
 import Parser, { ParsedConfig } from "./parser";
 import Renderer, { TableView } from "./renderer";
 import SchemaProvider from "./schema_provider";
-import Table from "./table";
+import Table, { TableData } from "./table";
 
 type ViewState = {
 	table: Table;
@@ -20,7 +20,7 @@ export default class Engine {
 		private parser: Parser,
 		private renderer: Renderer,
 		private dbCache: Cache<DbFileCacheEntry>,
-		private queryCache: Cache<QueryResultCacheEntry>,
+		private tableCache: Cache<TableDataCacheEntry>,
 		private schemaProvider: SchemaProvider,
 		private dbManager: DatabaseManager) {
 	}
@@ -61,13 +61,12 @@ export default class Engine {
 	}
 
 	private async processQuery(file: TFile, cfg: ParsedConfig): Promise<Table> {
-		let queryResults = this.getCachedQueryResults(file, cfg.query)
-		if (queryResults) {
-			// todo: temporary; will cache table instead and schema will be available
-			return Table.fromExecResults(queryResults.columns, queryResults.values, null)
+		const tableData = this.getCachedTableData(file, cfg.query)
+		if (tableData) {
+			return Table.fromTableData(tableData)
 		}
 
-		debug("no cached query results")
+		debug("no cached table data")
 
 		let db = this.getCachedDbFile(file)
 
@@ -81,33 +80,33 @@ export default class Engine {
 		}
 
 		const schema = await this.schemaProvider.getSchema(cfg);
-		queryResults = await this.dbManager.exec(file.path, cfg.query)
+		const execResults = await this.dbManager.exec(file.path, cfg.query)
 
-		const table = Table.fromExecResults(queryResults.columns, queryResults.values, schema)
+		const table = Table.fromExecResults(execResults.columns, execResults.values, schema)
 
-		this.cacheQuery(file, cfg.query, queryResults)
+		this.cacheTableData(file, cfg.query, table.getData())
 
 		return table
 	}
 
 
-	private getCachedQueryResults(file: TFile, query: string): QueryExecResult | undefined {
-		let queryResults: QueryExecResult | undefined
+	private getCachedTableData(file: TFile, query: string): TableData | undefined {
+		let tableData: TableData | undefined
 
 		const normalizedQuery = normalizeQuery(query)
 		const key = `${file.name}|${normalizedQuery}`
 
-		const cached = this.queryCache.get(key, file.stat.mtime)
+		const cached = this.tableCache.get(key, file.stat.mtime)
 		if (cached) {
-			if (!cached?.results) {
-				throw new Error("ERROR: query results not found in cache")
+			if (!cached?.data) {
+				throw new Error("ERROR: table data not found in cache")
 			}
 
-			queryResults = cached.results
-			debug("found query results in cache: ", queryResults)
+			tableData = cached.data
+			debug("found table data in cache: ", tableData)
 		}
 
-		return queryResults
+		return tableData
 	}
 
 	private getCachedDbFile(file: TFile): Database | undefined {
@@ -127,7 +126,7 @@ export default class Engine {
 		return cached?.db
 	}
 
-	private cacheQuery(file: TFile, query: string, queryResults: QueryExecResult) {
+	private cacheTableData(file: TFile, query: string, tableData: TableData) {
 		const normalizedQuery = normalizeQuery(query)
 		const key = `${file.name}|${normalizedQuery}`
 
@@ -135,9 +134,9 @@ export default class Engine {
 			throw new Error("ERROR: can not cache query; file mtime not found")
 		}
 
-		const entry = new QueryResultCacheEntry(queryResults, file.stat.mtime)
-		this.queryCache.set(key, entry)
-		info("query results cached successfully")
+		const entry = new TableDataCacheEntry(tableData, file.stat.mtime)
+		this.tableCache.set(key, entry)
+		info("table data cached successfully")
 	}
 
 	private cacheDb(file: TFile, db: Database) {

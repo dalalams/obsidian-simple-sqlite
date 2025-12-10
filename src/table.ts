@@ -11,7 +11,7 @@ export type TableMutations = {
 export type TableData = {
 	columns: string[],
 	values: SqlValue[][],
-	schema: ColumnSchema[],
+	schema: ReadonlyArray<ColumnSchema>,
 }
 
 export type CellError = {
@@ -40,7 +40,12 @@ export default class Table {
 	private cellErrors: Map<string, CellError>;
 
 	private constructor(data: TableData) {
-		this._data = data
+		this._data = {
+			columns: structuredClone(data.columns),
+			values: structuredClone(data.values),
+			schema: data.schema
+		};
+
 		this.cellErrors = new Map();
 		this.mutations = {
 			updates: new Map(),
@@ -52,8 +57,8 @@ export default class Table {
 
 	static fromExecResults(cols: string[], values: SqlValue[][], schema: ColumnSchema[]): Table {
 		const data = {
-			columns: structuredClone(cols),
-			values: structuredClone(values),
+			columns: cols,
+			values: values,
 			schema: schema
 		};
 		return new Table(data)

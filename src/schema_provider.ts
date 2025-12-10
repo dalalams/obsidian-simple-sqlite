@@ -3,11 +3,11 @@ import DatabaseManager from "./db/connection"
 import { QueryExecResult } from "sql.js"
 
 export type ColumnSchema = {
-	name: string,
-	type: string,
-	tableName?: string,
-	notNull: boolean,
-	isPrimaryKey: boolean,
+	readonly name: string,
+	readonly type: string,
+	readonly tableName?: string,
+	readonly notNull: boolean,
+	readonly isPrimaryKey: boolean,
 }
 
 export default interface SchemaProvider {

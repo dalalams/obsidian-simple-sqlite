@@ -3,11 +3,9 @@ import DatabaseManager, { DbConfig } from './db/connection';
 import Engine from './engine';
 import { CodeBlockParser } from './parser';
 import { HTMLTableRenderer } from './renderer';
-import { Cache, DbFileCacheEntry, QueryResultCacheEntry } from './cache';
+import { Cache, DbFileCacheEntry, TableDataCacheEntry } from './cache';
 import { info } from './logging';
 import { SimpleTableSchemaProvider } from './schema_provider';
-
-// type Result<T, E> = { ok: true, value: T } | { ok: false, error: E }
 
 interface Settings {
 	mySetting: string;
@@ -31,9 +29,9 @@ export default class SimpleSqlitePlugin extends Plugin {
 		const schemaProvider = new SimpleTableSchemaProvider(dbManager)
 
 		const dbCache: Cache<DbFileCacheEntry> = new Cache();
-		const queryCache: Cache<QueryResultCacheEntry> = new Cache();
+		const tableCache: Cache<TableDataCacheEntry> = new Cache();
 
-		this.engine = new Engine(this.app, parser, renderer, dbCache, queryCache, schemaProvider, dbManager);
+		this.engine = new Engine(this.app, parser, renderer, dbCache, tableCache, schemaProvider, dbManager);
 
 		this.registerMarkdownCodeBlockProcessor('sqlite-view', (source, el, _) => {
 			this.engine.processSqliteView(source, el)

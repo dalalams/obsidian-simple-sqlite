@@ -1,4 +1,5 @@
-import { Database, QueryExecResult } from "sql.js";
+import { Database } from "sql.js";
+import { TableData } from "./table";
 
 export interface CacheEntry {
 	isValid(compValue?: any): boolean
@@ -16,19 +17,15 @@ export class DbFileCacheEntry implements CacheEntry {
 	}
 }
 
-export class QueryResultCacheEntry implements CacheEntry {
-	constructor(
-		public results: QueryExecResult,
-		public dbLastModified: number
-	) { }
-
-	isValid(compValue?: any): boolean {
-		if (!compValue || !this.dbLastModified
-			|| compValue != this.dbLastModified) {
-			return false
-		}
-		return true
-	}
+export class TableDataCacheEntry implements CacheEntry {
+  constructor(
+    public data: TableData,
+    public dbLastModified: number
+  ) {}
+  
+  isValid(compValue?: number): boolean {
+    return !!compValue && compValue === this.dbLastModified
+  }
 }
 
 export class Cache<T extends CacheEntry> {
