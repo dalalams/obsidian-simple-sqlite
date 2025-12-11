@@ -38,7 +38,7 @@ export default class Engine {
 
 			const table = await this.processQuery(file, parsedCfg)
 
-			const view = this.renderer.render(el, table.getData(), {
+			const view = this.renderer.render(el, table.data, {
 				onCellBlur: (rowIdx, colIdx, value) => {
 					// todo
 				},
@@ -84,7 +84,7 @@ export default class Engine {
 
 		const table = Table.fromExecResults(execResults.columns, execResults.values, schema)
 
-		this.cacheTableData(file, cfg.query, table.getData())
+		this.cacheTableData(file, cfg.query, table.data)
 
 		return table
 	}

@@ -36,8 +36,8 @@ type ParseResult = {
 
 export default class Table {
 	private _data: TableData;
-	private mutations: TableMutations;
-	private cellErrors: Map<string, CellError>;
+	private _mutations: TableMutations;
+	private _cellErrors: Map<string, CellError>;
 
 	private constructor(data: TableData) {
 		this._data = {
@@ -46,8 +46,8 @@ export default class Table {
 			schema: data.schema
 		};
 
-		this.cellErrors = new Map();
-		this.mutations = {
+		this._cellErrors = new Map();
+		this._mutations = {
 			updates: new Map(),
 			inserts: new Map(),
 			deletes: [],
@@ -55,7 +55,7 @@ export default class Table {
 		}
 	}
 
-	static fromExecResults(cols: string[], values: SqlValue[][], schema: ColumnSchema[]): Table {
+	static fromExecResults(cols: string[], values: SqlValue[][], schema: ReadonlyArray<ColumnSchema>): Table {
 		const data = {
 			columns: cols,
 			values: values,
@@ -68,31 +68,58 @@ export default class Table {
 		return new Table(data)
 	}
 
-
-	getErrors(): CellError[] {
-		return Array.from(this.cellErrors.values())
-	}
-
-	hasErrors(): boolean {
-		return this.cellErrors.size > 0
-	}
-
-	getData(): TableData {
+	get data(): TableData {
 		return this._data
 	}
 
-	getMutations() {
-		return this.mutations
+	get mutations(): TableMutations {
+		return this._mutations
+	}
+
+	getErrors(): CellError[] {
+		return Array.from(this._cellErrors.values())
+	}
+
+	hasErrors(): boolean {
+		return this._cellErrors.size > 0
 	}
 
 	apply() {
+		if (this.hasErrors()) {
+			throw new Error('ERROR: cannot apply; table has validation errors');
+		}
+
+		const setRowVals = (row: SqlValue[], entry: { colsUpdated: Map<number, SqlValue> }) => {
+			entry.colsUpdated.forEach((val, colIdx) => {
+				row[colIdx] = val;
+			});
+		};
+
+		this.mutations.updates.forEach((entry, rowIdx) => {
+			const row = this._data.values[rowIdx];
+			if (!row) throw new Error(`ERROR: row ${rowIdx} does not exist`);
+			setRowVals(row, entry);
+		})
+
+		const sortedInserts = [...this._mutations.inserts.entries()]
+			.sort(([a], [b]) => a - b);
+
+		for (const [, entry] of sortedInserts) {
+			const newRow: SqlValue[] = new Array(this._data.columns.length).fill(null);
+			setRowVals(newRow, entry);
+
+			const hasValues = newRow.some(v => v !== null && v !== '');
+			if (!hasValues) continue;
+
+			this._data.values.push(newRow);
+		}
+
 		this.reset()
-		throw new Error("todo")
 	}
 
 	private reset() {
-		this.cellErrors = new Map()
-		this.mutations = {
+		this._cellErrors = new Map()
+		this._mutations = {
 			updates: new Map(),
 			inserts: new Map(),
 			deletes: [],
@@ -110,14 +137,14 @@ export default class Table {
 		if (schema) {
 			const result = this.parseValue(newVal, schema);
 			if (!result.valid) {
-				this.cellErrors.set(key, {
+				this._cellErrors.set(key, {
 					rowIdx, colIdx,
 					colName: schema.name,
 					message: result.message,
 					severity: 'error'
 				});
 			} else {
-				this.cellErrors.delete(key);
+				this._cellErrors.delete(key);
 			}
 			sqlVal = result.parsed
 		}
@@ -133,29 +160,29 @@ export default class Table {
 		const oldVal = this._data.values[rowIdx][colIdx];
 
 		if (this.valuesEqual(oldVal, newVal)) {
-			const entry = this.mutations.updates.get(rowIdx);
+			const entry = this._mutations.updates.get(rowIdx);
 			if (entry) {
 				entry.colsUpdated.delete(colIdx);
 				if (entry.colsUpdated.size === 0) {
-					this.mutations.updates.delete(rowIdx);
+					this._mutations.updates.delete(rowIdx);
 				}
 			}
 			return;
 		}
 
-		let entry = this.mutations.updates.get(rowIdx);
+		let entry = this._mutations.updates.get(rowIdx);
 		if (!entry) {
 			entry = { rowId: this.getRowId(rowIdx), colsUpdated: new Map() };
-			this.mutations.updates.set(rowIdx, entry);
+			this._mutations.updates.set(rowIdx, entry);
 		}
 		entry.colsUpdated.set(colIdx, newVal);
 	}
 
 	private trackInsert(rowIdx: number, colIdx: number, newVal: SqlValue) {
-		let entry = this.mutations.inserts.get(rowIdx);
+		let entry = this._mutations.inserts.get(rowIdx);
 		if (!entry) {
 			entry = { colsUpdated: new Map() };
-			this.mutations.inserts.set(rowIdx, entry);
+			this._mutations.inserts.set(rowIdx, entry);
 		}
 		entry.colsUpdated.set(colIdx, newVal);
 	}

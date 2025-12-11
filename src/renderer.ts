@@ -173,7 +173,7 @@ export class HTMLTableRenderer implements Renderer {
 		rowIdx: number,
 		colCount: number,
 		values: any[],
-		schema: ColumnSchema[],
+		schema: ReadonlyArray<ColumnSchema>,
 		cells: Map<string, HTMLTableCellElement>,
 		callbacks: RenderCallbacks
 	): HTMLTableRowElement {

@@ -39,7 +39,7 @@ describe('HTMLTableRenderer', () => {
     let renderer: HTMLTableRenderer;
     let el: HTMLElement;
     let callbacks: RenderCallbacks;
-    let schema: ColumnSchema[];
+    let schema: ReadonlyArray<ColumnSchema>;
     let data: TableData;
 
     beforeEach(() => {

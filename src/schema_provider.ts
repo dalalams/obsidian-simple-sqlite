@@ -12,7 +12,7 @@ export type ColumnSchema = {
 
 export default interface SchemaProvider {
 	getParsingSpec(): ParsingSpec
-	getSchema(config: ParsedConfig): Promise<ColumnSchema[]>
+	getSchema(config: ParsedConfig): Promise<ReadonlyArray<ColumnSchema>>
 }
 
 export class SimpleTableSchemaProvider implements SchemaProvider {
@@ -24,7 +24,7 @@ export class SimpleTableSchemaProvider implements SchemaProvider {
 
 
 
-	async getSchema(config: ParsedConfig): Promise<ColumnSchema[]> {
+	async getSchema(config: ParsedConfig): Promise<ReadonlyArray<ColumnSchema>> {
 		const tableName = config.tableNames[0]
 
 		const infoQuery = `PRAGMA table_info(${tableName})`
@@ -33,7 +33,7 @@ export class SimpleTableSchemaProvider implements SchemaProvider {
 		return this.parseSchemaFromPragma(schemaResult, tableName)
 	}
 
-	private parseSchemaFromPragma(pragmaResult: QueryExecResult, tableName: string): ColumnSchema[] {
+	private parseSchemaFromPragma(pragmaResult: QueryExecResult, tableName: string): ReadonlyArray<ColumnSchema> {
 		// PRAGMA table info returns: [cid, name, type, notnull, dflt_value, pk]
 		/* eslint-disable @typescript-eslint/no-non-null-assertion */
 		return pragmaResult.values.map(row => ({
