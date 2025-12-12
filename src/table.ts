@@ -32,6 +32,7 @@ type ParseResult = {
 	valid: boolean;
 	message: string;
 	parsed: SqlValue;
+	warning?: boolean;
 }
 
 export default class Table {
@@ -81,7 +82,7 @@ export default class Table {
 	}
 
 	hasErrors(): boolean {
-		return this._cellErrors.size > 0
+		return Array.from(this._cellErrors.values()).some(e => e.severity === 'error');
 	}
 
 	apply() {
@@ -136,12 +137,12 @@ export default class Table {
 
 		if (schema) {
 			const result = this.parseValue(newVal, schema);
-			if (!result.valid) {
+			if (!result.valid || result.warning) {
 				this._cellErrors.set(key, {
 					rowIdx, colIdx,
 					colName: schema.name,
 					message: result.message,
-					severity: 'error'
+					severity: result.warning ? 'warning' : 'error'
 				});
 			} else {
 				this._cellErrors.delete(key);
@@ -195,26 +196,51 @@ export default class Table {
 			return { valid: true, message: '', parsed: null };
 		}
 
-		value = value.trim()
-		const type = schema.type.toUpperCase();
+		value = value.trim();
+		const affinity = this.getAffinity(schema.type);
 
-		if (type === 'INTEGER') {
-			if (!/^-?\d+$/.test(value)) {
-				return { valid: false, message: `${schema.name} must be an integer`, parsed: value };
+		switch (affinity) {
+			case 'INTEGER': {
+				if (/^-?\d+$/.test(value)) {
+					return { valid: true, message: '', parsed: parseInt(value, 10) };
+				}
+				return { valid: true, message: `${schema.name} expects an integer`, parsed: value, warning: true };
 			}
-			return { valid: true, message: '', parsed: parseInt(value, 10) };
-		}
 
-		if (type === 'REAL' || type === 'NUMERIC') {
-			const num = Number(value);
-			if (isNaN(num)) {
-				return { valid: false, message: `${schema.name} must be a number`, parsed: value };
+			case 'REAL': {
+				const num = Number(value);
+				if (!isNaN(num)) {
+					return { valid: true, message: '', parsed: num };
+				}
+				return { valid: true, message: `${schema.name} expects a number`, parsed: value, warning: true };
 			}
-			return { valid: true, message: '', parsed: num };
-		}
 
-		// TEXT & BLOB 
-		return { valid: true, message: '', parsed: value };
+			case 'NUMERIC': {
+				// tries number first, falls back to text - both valid
+				const num = Number(value);
+				if (!isNaN(num) && value !== '') {
+					return { valid: true, message: '', parsed: num };
+				}
+				return { valid: true, message: '', parsed: value };
+			}
+
+			case 'TEXT':
+			case 'BLOB':
+			default:
+				return { valid: true, message: '', parsed: value };
+		}
+	}
+
+	private getAffinity(declaredType: string): 'INTEGER' | 'TEXT' | 'BLOB' | 'REAL' | 'NUMERIC' {
+		const type = declaredType.toUpperCase();
+
+		// affinity rules (https://www.sqlite.org/datatype3.html)
+		if (type.includes('INT')) return 'INTEGER';
+		if (type.includes('CHAR') || type.includes('CLOB') || type.includes('TEXT')) return 'TEXT';
+		if (type === 'BLOB' || type === '') return 'BLOB';
+		if (type.includes('REAL') || type.includes('FLOA') || type.includes('DOUB')) return 'REAL';
+
+		return 'NUMERIC';
 	}
 
 	private valuesEqual(a: SqlValue, b: SqlValue): boolean {

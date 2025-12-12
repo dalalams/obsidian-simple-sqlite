@@ -45,13 +45,14 @@ describe('Table', () => {
 		expect(mutations.inserts.get(1)?.colsUpdated.get(1)).toBe('Bob');
 	});
 
-	it('should report an error for invalid data type', () => {
+	it('should report a warning for invalid data type', () => {
 		const table = Table.fromExecResults(['id', 'name', 'value'], [[1, 'Alice', 1.0]], schema);
 		table.setCellValue(0, 0, 'not-an-integer');
-		expect(table.hasErrors()).toBe(true);
+		expect(table.hasErrors()).toBe(false);
 		const errors = table.getErrors();
 		expect(errors.length).toBe(1);
-		expect(errors[0].message).toBe('id must be an integer');
+		expect(errors[0].severity).toBe('warning');
+		expect(errors[0].message).toBe('id expects an integer');
 	});
 
 	it('should report an error for a null value in a not-null column', () => {
@@ -143,10 +144,19 @@ describe('Table', () => {
 
 		it('should throw when table has errors', () => {
 			const table = Table.fromExecResults(['id', 'name', 'value'], [[1, 'Alice', 1.0]], schema);
-			table.setCellValue(0, 2, 'not-a-number'); // triggers error
+			table.setCellValue(0, 0, ''); // NOT NULL violation - actual error
 
 			expect(table.hasErrors()).toBe(true);
 			expect(() => table.apply()).toThrow('ERROR: cannot apply; table has validation errors');
+		});
+
+		it('should apply when table has only warnings', () => {
+			const table = Table.fromExecResults(['id', 'name', 'value'], [[1, 'Alice', 1.0]], schema);
+			table.setCellValue(0, 2, 'not-a-number'); // triggers warning, not error
+
+			expect(table.hasErrors()).toBe(false);
+			expect(() => table.apply()).not.toThrow();
+			expect(table.data.values[0][2]).toBe('not-a-number'); // stored as string
 		});
 
 		it('should clear errors after successful apply', () => {
@@ -215,6 +225,120 @@ describe('Table', () => {
 			table.apply();
 
 			expect(table.data.values[0][1]).toBe('Alice');
+		});
+	});
+
+	describe('parseValue with type affinity', () => {
+		let schema: ReadonlyArray<ColumnSchema>;
+
+		beforeEach(() => {
+			schema = [
+				{ name: 'id', type: 'INTEGER', isPrimaryKey: true, notNull: true, tableName: 'test' },
+				{ name: 'name', type: 'TEXT', isPrimaryKey: false, notNull: false, tableName: 'test' },
+				{ name: 'score', type: 'REAL', isPrimaryKey: false, notNull: false, tableName: 'test' },
+				{ name: 'created_at', type: 'DATETIME', isPrimaryKey: false, notNull: false, tableName: 'test' },
+				{ name: 'is_active', type: 'BOOLEAN', isPrimaryKey: false, notNull: false, tableName: 'test' },
+			];
+		});
+
+		it('should parse valid integer', () => {
+			const table = Table.fromExecResults(['id', 'name', 'score', 'created_at', 'is_active'], [[1, 'Alice', 1.0, '2024-01-01', 1]], schema);
+			table.setCellValue(1, 0, '42');
+			expect(table.hasErrors()).toBe(false);
+		});
+
+		it('should warn but accept string in INTEGER column', () => {
+			const table = Table.fromExecResults(['id', 'name', 'score', 'created_at', 'is_active'], [[1, 'Alice', 1.0, '2024-01-01', 1]], schema);
+			table.setCellValue(0, 0, 'not-an-int');
+
+			expect(table.hasErrors()).toBe(false); // warnings don't block save
+			const errors = table.getErrors();
+			expect(errors.length).toBe(1);
+			expect(errors[0].severity).toBe('warning');
+			expect(errors[0].message).toBe('id expects an integer');
+		});
+
+		it('should parse valid real number', () => {
+			const table = Table.fromExecResults(['id', 'name', 'score', 'created_at', 'is_active'], [[1, 'Alice', 1.0, '2024-01-01', 1]], schema);
+			table.setCellValue(0, 2, '3.14');
+			expect(table.hasErrors()).toBe(false);
+			expect(table.getErrors().length).toBe(0);
+		});
+
+		it('should warn but accept string in REAL column', () => {
+			const table = Table.fromExecResults(['id', 'name', 'score', 'created_at', 'is_active'], [[1, 'Alice', 1.0, '2024-01-01', 1]], schema);
+			table.setCellValue(0, 2, 'not-a-number');
+
+			expect(table.hasErrors()).toBe(false);
+			const errors = table.getErrors();
+			expect(errors.length).toBe(1);
+			expect(errors[0].severity).toBe('warning');
+		});
+
+		it('should treat DATETIME as NUMERIC affinity - accept number', () => {
+			const table = Table.fromExecResults(['id', 'name', 'score', 'created_at', 'is_active'], [[1, 'Alice', 1.0, '2024-01-01', 1]], schema);
+			table.setCellValue(0, 3, '1704067200'); // unix timestamp
+			expect(table.getErrors().length).toBe(0);
+		});
+
+		it('should treat DATETIME as NUMERIC affinity - accept string', () => {
+			const table = Table.fromExecResults(['id', 'name', 'score', 'created_at', 'is_active'], [[1, 'Alice', 1.0, '2024-01-01', 1]], schema);
+			table.setCellValue(0, 3, '2024-01-01 12:00:00');
+			expect(table.getErrors().length).toBe(0);
+		});
+
+		it('should treat BOOLEAN as NUMERIC affinity', () => {
+			const table = Table.fromExecResults(['id', 'name', 'score', 'created_at', 'is_active'], [[1, 'Alice', 1.0, '2024-01-01', 1]], schema);
+			table.setCellValue(0, 4, 'true'); // stored as text, no warning
+			expect(table.getErrors().length).toBe(0);
+		});
+
+		it('should accept any value in TEXT column', () => {
+			const table = Table.fromExecResults(['id', 'name', 'score', 'created_at', 'is_active'], [[1, 'Alice', 1.0, '2024-01-01', 1]], schema);
+			table.setCellValue(0, 1, '12345');
+			expect(table.getErrors().length).toBe(0);
+		});
+
+		it('should still error on NOT NULL violation', () => {
+			const table = Table.fromExecResults(['id', 'name', 'score', 'created_at', 'is_active'], [[1, 'Alice', 1.0, '2024-01-01', 1]], schema);
+			table.setCellValue(0, 0, '');
+
+			expect(table.hasErrors()).toBe(true);
+			const errors = table.getErrors();
+			expect(errors[0].severity).toBe('error');
+		});
+	});
+
+	describe('getAffinity', () => {
+		const schema: ReadonlyArray<ColumnSchema> = [
+			{ name: 'a', type: 'BIGINT', isPrimaryKey: false, notNull: false, tableName: 't' },
+			{ name: 'b', type: 'VARCHAR(255)', isPrimaryKey: false, notNull: false, tableName: 't' },
+			{ name: 'c', type: 'DOUBLE', isPrimaryKey: false, notNull: false, tableName: 't' },
+			{ name: 'd', type: 'DECIMAL', isPrimaryKey: false, notNull: false, tableName: 't' },
+		];
+
+		it('should map BIGINT to INTEGER affinity', () => {
+			const table = Table.fromExecResults(['a', 'b', 'c', 'd'], [[1, 'x', 1.0, 1]], schema);
+			table.setCellValue(0, 0, 'text');
+			expect(table.getErrors()[0]?.message).toBe('a expects an integer');
+		});
+
+		it('should map VARCHAR to TEXT affinity', () => {
+			const table = Table.fromExecResults(['a', 'b', 'c', 'd'], [[1, 'x', 1.0, 1]], schema);
+			table.setCellValue(0, 1, '12345');
+			expect(table.getErrors().length).toBe(0); // no warning for TEXT
+		});
+
+		it('should map DOUBLE to REAL affinity', () => {
+			const table = Table.fromExecResults(['a', 'b', 'c', 'd'], [[1, 'x', 1.0, 1]], schema);
+			table.setCellValue(0, 2, 'text');
+			expect(table.getErrors()[0]?.message).toBe('c expects a number');
+		});
+
+		it('should map DECIMAL to NUMERIC affinity (no warnings)', () => {
+			const table = Table.fromExecResults(['a', 'b', 'c', 'd'], [[1, 'x', 1.0, 1]], schema);
+			table.setCellValue(0, 3, 'text');
+			expect(table.getErrors().length).toBe(0);
 		});
 	});
 });
