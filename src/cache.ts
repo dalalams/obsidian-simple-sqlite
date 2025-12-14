@@ -47,9 +47,17 @@ export class Cache<T extends CacheEntry> {
 
 	get(key: string, compValue?: any): T | undefined {
 		const entry = this.cache.get(key);
-		if (entry && !entry.isValid(compValue)) {
-			throw new Error(`ERROR: cached version is not valid`)
+		if (!entry) return undefined;
+
+		if (!entry.isValid(compValue)) {
+			this.cache.delete(key);
+			return undefined
 		}
+
 		return entry
+	}
+
+	invalidate(key: string) {
+		this.cache.delete(key);
 	}
 }

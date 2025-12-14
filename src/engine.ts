@@ -8,14 +8,9 @@ import Renderer, { TableView } from "./renderer";
 import SchemaProvider from "./schema_provider";
 import Table, { TableData } from "./table";
 
-type ViewState = {
-	table: Table;
-	view: TableView;
-	dbPath: string;
-	query: string;
-}
-
 export default class Engine {
+	private showErrorsOnEdit = false;  // todo: make this a setting
+
 	constructor(private app: App,
 		private parser: Parser,
 		private renderer: Renderer,
@@ -40,10 +35,10 @@ export default class Engine {
 
 			const view = this.renderer.render(el, table.data, {
 				onCellBlur: (rowIdx, colIdx, value) => {
-					// todo
+					this.handleCellBlur(table, view, rowIdx, colIdx, value);
 				},
 				onSave: () => {
-					// todo
+					this.handleSave(table, view, parsedCfg.dbPath, parsedCfg.query);
 				},
 				onAddRow: () => {
 					debug("row added");
@@ -55,13 +50,14 @@ export default class Engine {
 				},
 			});
 
+
 		} catch (error) {
 			el.createEl('div', { text: `Error: ${error.message}` });
 		}
 	}
 
 	private async processQuery(file: TFile, cfg: ParsedConfig): Promise<Table> {
-		const tableData = this.getCachedTableData(file, cfg.query)
+		const tableData = this.getCachedTableData(file.path, file.stat.mtime, cfg.query)
 		if (tableData) {
 			return Table.fromTableData(tableData)
 		}
@@ -84,19 +80,77 @@ export default class Engine {
 
 		const table = Table.fromExecResults(execResults.columns, execResults.values, schema)
 
-		this.cacheTableData(file, cfg.query, table.data)
+		this.cacheTableData(file.path, file.stat.mtime, cfg.query, table.data)
 
 		return table
 	}
 
+	// view controller
+	private handleCellBlur(
+		table: Table,
+		view: TableView,
+		rowIdx: number,
+		colIdx: number,
+		value: string
+	) {
+		table.setCellValue(rowIdx, colIdx, value);
 
-	private getCachedTableData(file: TFile, query: string): TableData | undefined {
+		const cellState = table.getCellState(rowIdx, colIdx);
+		view.updateCellState(rowIdx, colIdx, {
+			isModified: cellState.isModified,
+			error: this.showErrorsOnEdit ? cellState.error : null,
+		});
+
+		debug("cell state updated")
+	}
+
+	private async handleSave(
+		table: Table,
+		view: TableView,
+		dbPath: string,
+		query: string
+	) {
+		if (table.hasErrors()) {
+			debug("table has errors")
+			view.showErrors(table.getErrors());
+			view.showMessage("ERROR: Cannot save; fix validation errors first", "error");
+			return;
+		}
+
+		try {
+			// const mutations = table.mutations;
+			// todo:
+			// - map mutations to db operations
+			// - apply operations to database
+			// - export and vault write
+
+
+			table.apply();
+
+			const normalizedQuery = normalizeQuery(query);
+			const tableKey = `${dbPath}|${normalizedQuery}`;
+
+			this.tableCache.invalidate(tableKey);
+			this.dbCache.invalidate(dbPath);
+
+			view.clearErrors();
+			view.clearModified();
+			view.showMessage("Saved successfully", "success");
+
+			info("changes saved");
+		} catch (error) {
+			view.showMessage(`ERROR: Save failed; ${error.message}`, "error");
+		}
+	}
+
+	// cache 
+	private getCachedTableData(filePath: string, mtime: number, query: string): TableData | undefined {
 		let tableData: TableData | undefined
 
 		const normalizedQuery = normalizeQuery(query)
-		const key = `${file.name}|${normalizedQuery}`
+		const key = `${filePath}|${normalizedQuery}`
 
-		const cached = this.tableCache.get(key, file.stat.mtime)
+		const cached = this.tableCache.get(key, mtime)
 		if (cached) {
 			if (!cached?.data) {
 				throw new Error("ERROR: table data not found in cache")
@@ -126,15 +180,15 @@ export default class Engine {
 		return cached?.db
 	}
 
-	private cacheTableData(file: TFile, query: string, tableData: TableData) {
+	private cacheTableData(filePath: string, mtime: number, query: string, tableData: TableData) {
 		const normalizedQuery = normalizeQuery(query)
-		const key = `${file.name}|${normalizedQuery}`
+		const key = `${filePath}|${normalizedQuery}`
 
-		if (!file.stat.mtime) {
+		if (!mtime) {
 			throw new Error("ERROR: can not cache query; file mtime not found")
 		}
 
-		const entry = new TableDataCacheEntry(tableData, file.stat.mtime)
+		const entry = new TableDataCacheEntry(tableData, mtime)
 		this.tableCache.set(key, entry)
 		info("table data cached successfully")
 	}

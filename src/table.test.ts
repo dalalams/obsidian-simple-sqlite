@@ -341,4 +341,87 @@ describe('Table', () => {
 			expect(table.getErrors().length).toBe(0);
 		});
 	});
+
+	describe('getCellState', () => {
+		let schema: ReadonlyArray<ColumnSchema>;
+
+		beforeEach(() => {
+			schema = [
+				{ name: 'id', type: 'INTEGER', isPrimaryKey: true, notNull: true, tableName: 'test' },
+				{ name: 'name', type: 'TEXT', isPrimaryKey: false, notNull: false, tableName: 'test' },
+				{ name: 'value', type: 'REAL', isPrimaryKey: false, notNull: false, tableName: 'test' },
+			];
+		});
+
+		it('should return not modified for unchanged cell', () => {
+			const table = Table.fromExecResults(['id', 'name', 'value'], [[1, 'Alice', 1.0]], schema);
+
+			const state = table.getCellState(0, 1);
+
+			expect(state.isModified).toBe(false);
+			expect(state.error).toBeNull();
+		});
+
+		it('should return modified for updated cell', () => {
+			const table = Table.fromExecResults(['id', 'name', 'value'], [[1, 'Alice', 1.0]], schema);
+			table.setCellValue(0, 1, 'Alicia');
+
+			const state = table.getCellState(0, 1);
+
+			expect(state.isModified).toBe(true);
+			expect(state.error).toBeNull();
+		});
+
+		it('should return modified for inserted cell', () => {
+			const table = Table.fromExecResults(['id', 'name', 'value'], [[1, 'Alice', 1.0]], schema);
+			table.setCellValue(1, 1, 'Bob');
+
+			const state = table.getCellState(1, 1);
+
+			expect(state.isModified).toBe(true);
+			expect(state.error).toBeNull();
+		});
+
+		it('should return error for invalid cell', () => {
+			const table = Table.fromExecResults(['id', 'name', 'value'], [[1, 'Alice', 1.0]], schema);
+			table.setCellValue(0, 0, ''); // NOT NULL violation
+
+			const state = table.getCellState(0, 0);
+
+			expect(state.error).not.toBeNull();
+			expect(state.error?.severity).toBe('error');
+			expect(state.error?.message).toBe('id cannot be null');
+		});
+
+		it('should return warning for type mismatch', () => {
+			const table = Table.fromExecResults(['id', 'name', 'value'], [[1, 'Alice', 1.0]], schema);
+			table.setCellValue(0, 2, 'not-a-number');
+
+			const state = table.getCellState(0, 2);
+
+			expect(state.isModified).toBe(true);
+			expect(state.error).not.toBeNull();
+			expect(state.error?.severity).toBe('warning');
+		});
+
+		it('should return not modified after value reset to original', () => {
+			const table = Table.fromExecResults(['id', 'name', 'value'], [[1, 'Alice', 1.0]], schema);
+			table.setCellValue(0, 1, 'Alicia');
+			table.setCellValue(0, 1, 'Alice');
+
+			const state = table.getCellState(0, 1);
+
+			expect(state.isModified).toBe(false);
+		});
+
+		it('should clear error after valid value entered', () => {
+			const table = Table.fromExecResults(['id', 'name', 'value'], [[1, 'Alice', 1.0]], schema);
+			table.setCellValue(0, 0, ''); // error
+			table.setCellValue(0, 0, '42'); // valid
+
+			const state = table.getCellState(0, 0);
+
+			expect(state.error).toBeNull();
+		});
+	});
 });

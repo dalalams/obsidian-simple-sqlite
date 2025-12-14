@@ -128,6 +128,15 @@ export default class Table {
 		}
 	}
 
+	getCellState(rowIdx: number, colIdx: number): { isModified: boolean, error: CellError | null } {
+		const key = `${rowIdx}-${colIdx}`
+		const isModified = this._mutations.updates.get(rowIdx)?.colsUpdated.has(colIdx)
+			|| this._mutations.inserts.get(rowIdx)?.colsUpdated.has(colIdx)
+			|| false
+		const error = this._cellErrors.get(key) ?? null
+		return { isModified, error }
+	}
+
 	setCellValue(rowIdx: number, colIdx: number, newVal: string) {
 		const key = `${rowIdx}-${colIdx}`;
 		const isOriginalRow = rowIdx < this._data.values.length;
