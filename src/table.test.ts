@@ -424,4 +424,47 @@ describe('Table', () => {
 			expect(state.error).toBeNull();
 		});
 	});
+
+	describe('trackInsert cleanup', () => {
+		let schema: ReadonlyArray<ColumnSchema>;
+
+		beforeEach(() => {
+			schema = [
+				{ name: 'id', type: 'INTEGER', isPrimaryKey: true, notNull: true, tableName: 'test' },
+				{ name: 'name', type: 'TEXT', isPrimaryKey: false, notNull: false, tableName: 'test' },
+			];
+		});
+
+		it('should remove insert entry when all values cleared', () => {
+			const table = Table.fromExecResults(['id', 'name'], [[1, 'Alice']], schema);
+			table.setCellValue(1, 1, 'Bob');
+
+			expect(table.mutations.inserts.size).toBe(1);
+
+			table.setCellValue(1, 1, '');
+
+			expect(table.mutations.inserts.size).toBe(0);
+		});
+
+		it('should keep insert entry if at least one value remains', () => {
+			const table = Table.fromExecResults(['id', 'name'], [[1, 'Alice']], schema);
+			table.setCellValue(1, 0, '2');
+			table.setCellValue(1, 1, 'Bob');
+
+			expect(table.mutations.inserts.size).toBe(1);
+
+			table.setCellValue(1, 1, '');
+
+			expect(table.mutations.inserts.size).toBe(1);
+			expect(table.mutations.inserts.get(1)?.colsUpdated.get(0)).toBe(2);
+		});
+
+		it('should remove insert entry when value set to null', () => {
+			const table = Table.fromExecResults(['id', 'name'], [[1, 'Alice']], schema);
+			table.setCellValue(1, 1, 'Bob');
+			table.setCellValue(1, 1, null as any);
+
+			expect(table.mutations.inserts.size).toBe(0);
+		});
+	});
 });

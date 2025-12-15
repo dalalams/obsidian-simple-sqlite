@@ -195,6 +195,11 @@ export default class Table {
 			this._mutations.inserts.set(rowIdx, entry);
 		}
 		entry.colsUpdated.set(colIdx, newVal);
+
+		const hasValues = [...entry.colsUpdated.values()].some(v => v !== null && v !== '');
+		if (!hasValues) {
+			this._mutations.inserts.delete(rowIdx);
+		}
 	}
 
 	private parseValue(value: string | null, schema: ColumnSchema): ParseResult {
