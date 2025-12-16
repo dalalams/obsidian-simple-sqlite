@@ -3,6 +3,7 @@ import { Database } from "sql.js";
 import { Cache, DbFileCacheEntry, TableDataCacheEntry } from './cache/cache';
 import DatabaseManager from "./db/connection";
 import { debug, info } from "./logging";
+import { mapMutations } from "./core/mapper";
 import Parser, { ParsedConfig } from "./core/parser";
 import Renderer, { TableView } from "./ui/renderer";
 import SchemaProvider from "./db/schema_provider";
@@ -37,8 +38,8 @@ export default class Engine {
 				onCellBlur: (rowIdx, colIdx, value) => {
 					this.handleCellBlur(table, view, rowIdx, colIdx, value);
 				},
-				onSave: () => {
-					this.handleSave(table, view, parsedCfg.dbPath, parsedCfg.query);
+				onSave: async () => {
+					await this.handleSave(table, view, parsedCfg);
 				},
 				onAddRow: () => {
 					debug("row added");
@@ -94,6 +95,7 @@ export default class Engine {
 		value: string
 	) {
 		table.setCellValue(rowIdx, colIdx, value);
+		debug(table)
 
 		const cellState = table.getCellState(rowIdx, colIdx);
 		view.updateCellState(rowIdx, colIdx, {
@@ -107,8 +109,7 @@ export default class Engine {
 	private async handleSave(
 		table: Table,
 		view: TableView,
-		dbPath: string,
-		query: string
+		parsedCfg: ParsedConfig
 	) {
 		if (table.hasErrors()) {
 			debug("table has errors")
@@ -118,20 +119,19 @@ export default class Engine {
 		}
 
 		try {
-			// const mutations = table.mutations;
-			// todo:
-			// - map mutations to db operations
-			// - apply operations to database
-			// - export and vault write
+			const exportedData = await this.executeSave(table, parsedCfg.dbPath);
 
+			const file = this.app.vault.getFileByPath(parsedCfg.dbPath);
+			if (!file) {
+				throw new Error(`Database file "${parsedCfg.dbPath}" not found`);
+			}
+			await this.app.vault.modifyBinary(file, exportedData);
 
-			table.apply();
-
-			const normalizedQuery = normalizeQuery(query);
-			const tableKey = `${dbPath}|${normalizedQuery}`;
+			const normalizedQuery = normalizeQuery(parsedCfg.query);
+			const tableKey = `${parsedCfg.dbPath}|${normalizedQuery}`;
 
 			this.tableCache.invalidate(tableKey);
-			this.dbCache.invalidate(dbPath);
+			this.dbCache.invalidate(parsedCfg.dbPath);
 
 			view.clearErrors();
 			view.clearModified();
@@ -141,6 +141,26 @@ export default class Engine {
 		} catch (error) {
 			view.showMessage(`ERROR: Save failed; ${error.message}`, "error");
 		}
+	}
+
+	private async executeSave(table: Table, dbPath: string): Promise<Uint8Array> {
+		const statements = mapMutations(table.mutations, table.data.schema);
+
+		if (statements.length > 0) {
+			await this.dbManager.run(dbPath, 'BEGIN', []);
+			try {
+				for (const stmt of statements) {
+					await this.dbManager.run(dbPath, stmt.sql, stmt.params);
+				}
+				await this.dbManager.run(dbPath, 'COMMIT', []);
+			} catch (e) {
+				await this.dbManager.run(dbPath, 'ROLLBACK', []);
+				throw e;
+			}
+		}
+
+		table.apply();
+		return this.dbManager.export(dbPath);
 	}
 
 	// cache 

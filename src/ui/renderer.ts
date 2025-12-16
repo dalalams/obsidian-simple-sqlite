@@ -4,7 +4,7 @@ import { ColumnSchema } from "../db/schema_provider";
 
 export type RenderCallbacks = {
 	onCellBlur: (rowIdx: number, colIdx: number, value: string) => void;
-	onSave: () => void;
+	onSave: () => void | Promise<void>;
 	onAddRow: () => void;
 	onAddCol: (name: string) => void;
 }
