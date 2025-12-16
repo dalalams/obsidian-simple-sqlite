@@ -1,5 +1,5 @@
 import { SqlValue } from "sql.js";
-import { ColumnSchema } from "./schema_provider";
+import { ColumnSchema } from "../db/schema_provider";
 
 export type TableMutations = {
 	updates: Map<number, { rowId: SqlValue, colsUpdated: Map<number, SqlValue> }>,

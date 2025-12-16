@@ -1,4 +1,3 @@
-
 export type ParsingSpec = {
 	needsNTableNames: number,
 	needsCustomSchema: boolean,

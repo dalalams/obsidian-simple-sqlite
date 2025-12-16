@@ -1,6 +1,6 @@
-import { mapMutations, mapUpdates, mapInserts, SqlStatement } from './mapper';
+import { mapMutations, mapUpdates, mapInserts } from './mapper';
 import { TableMutations } from './table';
-import { ColumnSchema } from './schema_provider';
+import { ColumnSchema } from '../db/schema_provider';
 
 describe('mapper', () => {
 	let schema: ReadonlyArray<ColumnSchema>;

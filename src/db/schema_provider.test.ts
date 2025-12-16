@@ -1,10 +1,10 @@
 
 import { SimpleTableSchemaProvider } from './schema_provider';
-import DatabaseManager from './db/connection';
-import { ParsedConfig, ParsingSpec } from './parser';
+import DatabaseManager from './connection';
+import { ParsedConfig, ParsingSpec } from '../core/parser';
 import { QueryExecResult } from 'sql.js';
 
-jest.mock('./db/connection');
+jest.mock('./connection');
 
 describe('SimpleTableSchemaProvider', () => {
     let dbManager: jest.Mocked<DatabaseManager>;

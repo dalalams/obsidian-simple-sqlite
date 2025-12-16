@@ -1,12 +1,12 @@
 import { App, TFile } from "obsidian";
 import { Database } from "sql.js";
-import { Cache, DbFileCacheEntry, TableDataCacheEntry } from './cache';
+import { Cache, DbFileCacheEntry, TableDataCacheEntry } from './cache/cache';
 import DatabaseManager from "./db/connection";
 import { debug, info } from "./logging";
-import Parser, { ParsedConfig } from "./parser";
-import Renderer, { TableView } from "./renderer";
-import SchemaProvider from "./schema_provider";
-import Table, { TableData } from "./table";
+import Parser, { ParsedConfig } from "./core/parser";
+import Renderer, { TableView } from "./ui/renderer";
+import SchemaProvider from "./db/schema_provider";
+import Table, { TableData } from "./core/table";
 
 export default class Engine {
 	private showErrorsOnEdit = false;  // todo: make this a setting

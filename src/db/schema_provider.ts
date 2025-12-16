@@ -1,5 +1,5 @@
-import { ParsedConfig, ParsingSpec } from "./parser"
-import DatabaseManager from "./db/connection"
+import { ParsedConfig, ParsingSpec } from "../core/parser"
+import DatabaseManager from "./connection"
 import { QueryExecResult } from "sql.js"
 
 export type ColumnSchema = {

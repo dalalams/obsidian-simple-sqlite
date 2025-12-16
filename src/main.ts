@@ -1,11 +1,11 @@
 import { Plugin } from 'obsidian';
 import DatabaseManager, { DbConfig } from './db/connection';
 import Engine from './engine';
-import { CodeBlockParser } from './parser';
-import { HTMLTableRenderer } from './renderer';
-import { Cache, DbFileCacheEntry, TableDataCacheEntry } from './cache';
+import { CodeBlockParser } from './core/parser';
+import { HTMLTableRenderer } from './ui/renderer';
+import { Cache, DbFileCacheEntry, TableDataCacheEntry } from './cache/cache';
 import { info } from './logging';
-import { SimpleTableSchemaProvider } from './schema_provider';
+import { SimpleTableSchemaProvider } from './db/schema_provider';
 
 interface Settings {
 	mySetting: string;

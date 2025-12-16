@@ -1,5 +1,5 @@
 import { Cache, CacheEntry, DbFileCacheEntry, TableDataCacheEntry } from './cache';
-import { TableData } from './table';
+import { TableData } from '../core/table';
 
 class MockCacheEntry implements CacheEntry {
 	constructor(public value: string, private validFor: number) {}

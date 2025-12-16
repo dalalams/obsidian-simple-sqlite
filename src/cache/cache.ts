@@ -1,5 +1,5 @@
 import { Database } from "sql.js";
-import { TableData } from "./table";
+import { TableData } from "../core/table";
 
 export interface CacheEntry {
 	isValid(compValue?: any): boolean

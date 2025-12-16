@@ -1,6 +1,6 @@
 import { setIcon, setTooltip } from 'obsidian';
-import { CellError, TableData } from "./table";
-import { ColumnSchema } from "./schema_provider";
+import { CellError, TableData } from "../core/table";
+import { ColumnSchema } from "../db/schema_provider";
 
 export type RenderCallbacks = {
 	onCellBlur: (rowIdx: number, colIdx: number, value: string) => void;

@@ -1,6 +1,6 @@
 import { HTMLTableRenderer, RenderCallbacks, TableView } from './renderer';
-import { TableData } from './table';
-import { ColumnSchema } from './schema_provider';
+import { TableData } from '../core/table';
+import { ColumnSchema } from '../db/schema_provider';
 
 jest.mock('obsidian', () => ({
     setIcon: jest.fn(),

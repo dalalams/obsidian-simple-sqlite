@@ -1,6 +1,6 @@
 
 import Table, { TableData } from './table';
-import { ColumnSchema } from './schema_provider';
+import { ColumnSchema } from '../db/schema_provider';
 
 describe('Table', () => {
 	let schema: ReadonlyArray<ColumnSchema>;

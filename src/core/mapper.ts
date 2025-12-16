@@ -1,6 +1,6 @@
 
 import { SqlValue } from "sql.js";
-import { ColumnSchema } from "./schema_provider";
+import { ColumnSchema } from "../db/schema_provider";
 import { TableMutations } from "./table";
 
 export type SqlStatement = {
