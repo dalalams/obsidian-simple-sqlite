@@ -65,6 +65,24 @@ class DatabaseManager {
 
 		return res[0]
 	}
+
+	async run(dbName: string, sql: string, params: any[]): Promise<void> {
+		const db = this._connPool.get(dbName);
+		if (!db) {
+			throw new Error(`ERROR: database "${dbName}" not found`);
+		}
+
+		db.run(sql, params);
+	}
+
+	export(dbName: string): Uint8Array {
+		const db = this._connPool.get(dbName);
+		if (!db) {
+			throw new Error(`ERROR: database "${dbName}" not found`);
+		}
+
+		return db.export();
+	}
 }
 
 export default DatabaseManager
